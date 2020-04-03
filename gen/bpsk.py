@@ -1,3 +1,4 @@
+# derived from http://www.programmersought.com/article/807262014/
 import numpy as np
 from math import pi
 import matplotlib.pyplot as plt
@@ -6,7 +7,7 @@ import scipy.signal as signal
 import math
  
 # 
-size = 10
+size = 16
 sampling_t = 0.01
 t = np.arange(0, size, sampling_t)
  
@@ -18,7 +19,7 @@ for i in range(len(t)):
 fig = plt.figure()
 ax1 = fig.add_subplot(3, 1, 1)
  
-ax1.set_title('Generate random n-bit binary signal', fontsize = 20)
+ax1.set_title('Generate random n-bit binary signal')
 plt.axis([0, size, -0.5, 1.5])
 plt.plot(t, m, 'b')
  
@@ -31,7 +32,7 @@ bpsk = np.cos(np.dot(2 * pi * fc, ts) + pi * (m - 1) + pi / 4)
  
 # BPSK modulated signal waveform
 ax2 = fig.add_subplot(3, 1, 2)
-ax2.set_title('BPSK modulation signal', fontsize=20)
+ax2.set_title('BPSK modulation signal')
 plt.axis([0,size,-1.5, 1.5])
 plt.plot(t, bpsk, 'r')
  
@@ -49,7 +50,7 @@ print('noise_bpsk', noise_bpsk.shape)
  
 # BPSK modulation signal superimposed noise waveform
 ax3 = fig.add_subplot(3, 1, 3)
-ax3.set_title('BPSK modulated signal superimposed noise waveform', fontsize = 20)
+ax3.set_title('BPSK modulated signal superimposed noise waveform')
 plt.axis([0, size, -1.5, 1.5])
 plt.plot(t, noise_bpsk, 'r')
  
@@ -69,7 +70,7 @@ coherent_demod = bandpass_out * (coherent_carrier * 2)
 lowpass_out = signal.filtfilt(b12, a12, coherent_demod)
 fig2 = plt.figure()
 bx1 = fig2.add_subplot(3, 1, 1)
-bx1.set_title('local carrier downconversion, after low pass filter', fontsize=20)
+bx1.set_title('local carrier downconversion, after low pass filter')
 plt.axis([0, size, -1.5, 1.5])
 plt.plot(t, lowpass_out, 'r')
  
@@ -94,7 +95,7 @@ for i in range(size):
             detection_bpsk[i * 100 + j] = 1
  
 bx2 = fig2.add_subplot(3, 1, 2)
-bx2.set_title('signal after BPSK signal sampling decision', fontsize=20)
+bx2.set_title('signal after BPSK signal sampling decision')
 plt.axis([0, size, -0.5, 1.5])
 plt.plot(t, detection_bpsk, 'r')
 plt.show()
