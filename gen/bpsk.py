@@ -47,6 +47,7 @@ def awgn(y, snr):
 # AWGN noise
 noise_bpsk = awgn(bpsk, 5)
 print('noise_bpsk', noise_bpsk.shape)
+np.save('noise_bpsk', noise_bpsk)
  
 # BPSK modulation signal superimposed noise waveform
 ax3 = fig.add_subplot(3, 1, 3)
