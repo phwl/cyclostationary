@@ -4,7 +4,7 @@ Implementation of cyclostationary analysis:
 
 requirements.txt - dependencies
 audiosample.npy  - sample array to verify computation
-scf_fam.py       - estimates Spectral Correlation Function (SCF) using fast accumulation (FAM) method
+scf_fam.py       - estimates Spectral Correlation Function (SCF) using FFT accumulation (FAM) method
 livescf.py       - reads from microphone and plots scf using pyqtgraph
 
 To verify: 
