@@ -3,55 +3,55 @@ import math
 import numpy as np
 from numpy.lib.stride_tricks import as_strided
 
-def sliding_window(x, w, s):
-	shape = (int((x.shape[0] - w) / s + 1), w)
-	strides = (x.strides[0]*s, x.strides[0])
-	return as_strided(x, shape, strides)
-
 def fam(x, Np, L, N=None):
-	# input channelization
-	xs = sliding_window(x, Np, L)
-	if N is None:
-		Pe = int(np.floor(int(np.log(xs.shape[0])/np.log(2))))
-		P = 2**Pe
-		N = L*P
-	else:
-		P = N/L
-	xs2 = xs[0:P,:]
-	
-	# windowing
-	w = np.hamming(Np)
-	w /= np.sqrt(np.sum(w**2))
-	xw = xs2 * np.tile(w, (P,1))
+    def sliding_window(x, w, s):
+        shape = (int((x.shape[0] - w) / s + 1), w)
+        strides = (x.strides[0]*s, x.strides[0])
+        return as_strided(x, shape, strides)
 
-	# first FFT
-	XF1 = np.fft.fft(xw, axis=1)
-	XF1 = np.fft.fftshift(XF1, axes=1)
+    # input channelization
+    xs = sliding_window(x, Np, L)
+    if N is None:
+        Pe = int(np.floor(int(np.log(xs.shape[0])/np.log(2))))
+        P = 2**Pe
+        N = L*P
+    else:
+        P = N/L
+    xs2 = xs[0:P,:]
+    
+    # windowing
+    w = np.hamming(Np)
+    w /= np.sqrt(np.sum(w**2))
+    xw = xs2 * np.tile(w, (P,1))
 
-	# calculating complex demodulates
-	f = np.arange(Np)/float(Np) - .5
-	t = np.arange(P)*L
+    # first FFT
+    XF1 = np.fft.fft(xw, axis=1)
+    XF1 = np.fft.fftshift(XF1, axes=1)
 
-	f = np.tile(f, (P,1))
-	t = np.tile(t.reshape(P,1), (1, Np))
+    # calculating complex demodulates
+    f = np.arange(Np)/float(Np) - .5
+    t = np.arange(P)*L
 
-	XD = XF1
-	XD *= np.exp(-1j*2*np.pi*f*t)
+    f = np.tile(f, (P,1))
+    t = np.tile(t.reshape(P,1), (1, Np))
 
-	# calculating conjugate products, second FFT and the final matrix
-	Sx = np.zeros((Np, 2*N), dtype=complex)
-	Mp = int(N/Np/2)
+    XD = XF1
+    XD *= np.exp(-1j*2*np.pi*f*t)
 
-	for k in range(Np):
-		for l in range(Np):
-			XF2 = np.fft.fft(XD[:,k]*np.conjugate(XD[:,l]))
-			XF2 = np.fft.fftshift(XF2)
-			XF2 /= P
+    # calculating conjugate products, second FFT and the final matrix
+    Sx = np.zeros((Np, 2*N), dtype=complex)
+    Mp = int(N/Np/2)
 
-			i = int( (k+l)/2. )
-			a = int( ((k-l)/float(Np) + 1.)*N )
-			Sx[i,a-Mp:a+Mp] = XF2[int(P/2-Mp):int(P/2+Mp)]
-	return Sx
+    for k in range(Np):
+        for l in range(Np):
+            XF2 = np.fft.fft(XD[:,k]*np.conjugate(XD[:,l]))
+            XF2 = np.fft.fftshift(XF2)
+            XF2 /= P
+
+            i = int( (k+l)/2. )
+            a = int( ((k-l)/float(Np) + 1.)*N )
+            Sx[i,a-Mp:a+Mp] = XF2[int(P/2-Mp):int(P/2+Mp)]
+    return Sx
 
 # compare with precomputed solution
 if __name__ == "__main__":
@@ -73,7 +73,8 @@ if __name__ == "__main__":
         plt.show()
 
     def main():
-        audiotest()
+        import timeit
+        print(timeit.timeit("audiotest()", number=1, setup="from __main__ import audiotest"))
         bpsktest()
 
     main()
