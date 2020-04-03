@@ -18,4 +18,3 @@ python livescf.py
 ~~~
 
 ![Screen shot](ScreenShot.png)
-Format: ![Alt Text](url)
