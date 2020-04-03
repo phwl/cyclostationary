@@ -16,3 +16,6 @@ To acquire audio from microphone and plot scf:
 ~~~
 python livescf.py
 ~~~
+
+![Screen shot](ScreenShot.png)
+Format: ![Alt Text](url)
