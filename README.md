@@ -9,12 +9,14 @@ livescf.py       - reads from microphone and plots scf using pyqtgraph
 
 To verify: 
 ~~~
-python scf_fam.py # should print "Error  0.0" on console and plot graph
+python scf_fam.py # should print "audiotest: PASS (error=0.0)" and show
 ~~~
+
+![Screen shot](images/ScreenShot_scf_fam.png)
 
 To acquire audio from microphone and plot scf:
 ~~~
 python livescf.py
 ~~~
 
-![Screen shot](ScreenShot.png)
+![Screen shot](images/ScreenShot_livescf.png)
