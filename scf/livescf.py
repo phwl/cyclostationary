@@ -8,7 +8,8 @@ from PyQt5 import QtCore, QtGui
 import scf_fam
 
 FS = 44100 #Hz
-CHUNKSZ = 1024 #samples
+CHUNKSZ = 4096 #samples
+dosave = False
 
 class MicrophoneRecorder():
     def __init__(self, signal):
@@ -63,7 +64,8 @@ class SpectrogramWidget(pg.PlotWidget):
         # test code
         fchunk = np.array(chunk, dtype='float')
         Np = 256
-        self.img_array = np.absolute(scf_fam.fam(chunk, Np, 1))
+        L = Np // 4
+        self.img_array = np.absolute(scf_fam.fam(chunk, Np, L))
 
         self.img.setImage(self.img_array, autoLevels=False)
 
@@ -73,10 +75,17 @@ class SpectrogramWidget(pg.PlotWidget):
         self.updatetime = now
         self.fps = self.fps * 0.9 + fps2 * 0.1
         print("%0.1f fps" % self.fps)
-        # smat = (Np, chunk, self.img_array)
-        # np.save('audiosample', smat)
+        smat = (Np, L, chunk, self.img_array)
+        np.save('audiosample', smat)
 
 if __name__ == '__main__':
+    import argparse
+    parser = argparse.ArgumentParser(description='live scf plot')
+    parser.add_argument("-s", action="store_true", help="save data file")
+    args = parser.parse_args()
+    if args.s:
+        dosave = True
+
     app = QtGui.QApplication([])
     w = SpectrogramWidget()
     w.read_collected.connect(w.update)

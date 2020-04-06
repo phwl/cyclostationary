@@ -40,7 +40,7 @@ def fam(x, Np, L, N=None):
 
     # calculating conjugate products, second FFT and the final matrix
     Sx = np.zeros((Np, 2*N), dtype=complex)
-    Mp = int(N/Np/2)
+    Mp = N//Np//2
 
     for k in range(Np):
         for l in range(Np):
@@ -56,8 +56,9 @@ def fam(x, Np, L, N=None):
 # compare with precomputed solution
 if __name__ == "__main__":
     def audiotest():
-        (Np, x, y) = np.load('audiosample.npy', allow_pickle=True)
-        f = np.absolute(fam(x, Np, 1))
+        (Np, L, x, y) = np.load('audiosample.npy', allow_pickle=True)
+        print("x.shape={}, Np={}, L={}".format(x.shape, Np, L))
+        f = np.absolute(fam(x, Np, L))
         err = np.linalg.norm(f - y)
         passfail = 'PASS' if err == 0.0 else 'FAIL'
         print("audiotest: {} (error={})".format(passfail, err))
@@ -73,8 +74,17 @@ if __name__ == "__main__":
         plt.show()
 
     def main():
-        import timeit
-        print(timeit.timeit("audiotest()", number=1, setup="from __main__ import audiotest"))
+        import argparse
+        parser = argparse.ArgumentParser(description='scf analysis')
+        parser.add_argument("-t", action="store_true", help="time execution")
+        args = parser.parse_args()
+        if args.t:
+            import timeit
+            runs = 5
+            print("Timing excecution over {} runs".format(runs))
+            print(timeit.timeit("audiotest()", number=runs, setup="from __main__ import audiotest"))
+        else:
+            audiotest()
         bpsktest()
 
     main()
