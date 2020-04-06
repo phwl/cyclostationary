@@ -75,8 +75,9 @@ class SpectrogramWidget(pg.PlotWidget):
         self.updatetime = now
         self.fps = self.fps * 0.9 + fps2 * 0.1
         print("%0.1f fps" % self.fps)
-        smat = (Np, L, chunk, self.img_array)
-        np.save('audiosample', smat)
+        if dosave:
+            smat = (Np, L, chunk, self.img_array)
+            np.save('audiosample', smat)
 
 if __name__ == '__main__':
     import argparse
