@@ -5,7 +5,7 @@ from numpy.lib.stride_tricks import as_strided
 
 def fam(x, Np, L, N=None):
     def sliding_window(x, w, s):
-        shape = (int((x.shape[0] - w) / s + 1), w)
+        shape = (((x.shape[0] - w) // s + 1), w)
         strides = (x.strides[0]*s, x.strides[0])
         return as_strided(x, shape, strides)
 
@@ -48,9 +48,9 @@ def fam(x, Np, L, N=None):
             XF2 = np.fft.fftshift(XF2)
             XF2 /= P
 
-            i = int( (k+l)/2. )
-            a = int( ((k-l)/float(Np) + 1.)*N )
-            Sx[i,a-Mp:a+Mp] = XF2[int(P/2-Mp):int(P/2+Mp)]
+            i = (k+l) // 2
+            a = int(((k-l)/float(Np) + 1.) * N)
+            Sx[i,a-Mp:a+Mp] = XF2[(P//2-Mp):(P//2+Mp)]
     return Sx
 
 # compare with precomputed solution
