@@ -1,6 +1,7 @@
 # derived from  https://github.com/avian2/spectrum-sensing-methods/blob/master/sensing/utils.py
 import math
 import numpy as np
+import matplotlib.pyplot as plt
 from numpy.lib.stride_tricks import as_strided
 
 def fam(x, Np, L, N=None):
@@ -16,7 +17,7 @@ def fam(x, Np, L, N=None):
         P = 2**Pe
         N = L*P
     else:
-        P = N/L
+        P = N//L
     xs2 = xs[0:P,:]
     
     # windowing
@@ -53,6 +54,14 @@ def fam(x, Np, L, N=None):
             Sx[i,a-Mp:a+Mp] = XF2[(P//2-Mp):(P//2+Mp)]
     return Sx
 
+def plotfam(x, Np, L, t):
+    s = fam(x, Np, L)
+    f = np.absolute(s)
+    plt.matshow(f, cmap='hot')
+    plt.suptitle(t)
+    plt.colorbar()
+    plt.show()
+
 # compare with precomputed solution
 if __name__ == "__main__":
     def audiotest():
@@ -64,14 +73,9 @@ if __name__ == "__main__":
         print("audiotest: {} (error={})".format(passfail, err))
     
     def bpsktest():
-        import matplotlib.pyplot as plt
         # x is a bpsk + noise input 
         x = np.load('../gen/noise_bpsk.npy')[0:1024]
-        f = np.absolute(fam(x, 256, 1))
-        plt.matshow(np.log(f+1))
-        plt.suptitle('BPSK')
-        plt.colorbar()
-        plt.show()
+        plotfam(x, 256, 1, "BSPK")
 
     def main():
         import argparse
