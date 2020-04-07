@@ -8,7 +8,7 @@ from PyQt5 import QtCore, QtGui
 import scf_fam
 
 FS = 44100 #Hz
-CHUNKSZ = 4096 #samples
+CHUNKSZ = 2048 #samples
 dosave = False
 
 class MicrophoneRecorder():
