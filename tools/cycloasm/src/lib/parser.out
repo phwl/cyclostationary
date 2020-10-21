@@ -1,0 +1,232 @@
+Created by PLY version 3.9 (http://www.dabeaz.com/ply)
+
+Grammar
+
+Rule 0     S' -> program
+Rule 1     program -> statement
+Rule 2     program -> LABEL COLUMN NEWLINE
+Rule 3     statement -> OPCODE register COMMA register COMMA register NEWLINE
+Rule 4     statement -> OPCODE register COMMA register COMMA IMMEDIATE NEWLINE
+Rule 5     statement -> OPCODE register COMMA IMMEDIATE NEWLINE
+Rule 6     statement -> OPCODE register COMMA LABEL NEWLINE
+Rule 7     statement -> OPCODE register COMMA register COMMA LABEL NEWLINE
+Rule 8     register -> REGISTER
+Rule 9     statement -> NEWLINE
+
+Terminals, with rules where they appear
+
+COLUMN               : 2
+COMMA                : 3 3 4 4 5 6 7 7
+IMMEDIATE            : 4 5
+LABEL                : 2 6 7
+NEWLINE              : 2 3 4 5 6 7 9
+OPCODE               : 3 4 5 6 7
+REGISTER             : 8
+error                : 
+
+Nonterminals, with rules where they appear
+
+program              : 0
+register             : 3 3 3 4 4 5 6 7 7
+statement            : 1
+
+Parsing method: LALR
+
+state 0
+
+    (0) S' -> . program
+    (1) program -> . statement
+    (2) program -> . LABEL COLUMN NEWLINE
+    (3) statement -> . OPCODE register COMMA register COMMA register NEWLINE
+    (4) statement -> . OPCODE register COMMA register COMMA IMMEDIATE NEWLINE
+    (5) statement -> . OPCODE register COMMA IMMEDIATE NEWLINE
+    (6) statement -> . OPCODE register COMMA LABEL NEWLINE
+    (7) statement -> . OPCODE register COMMA register COMMA LABEL NEWLINE
+    (9) statement -> . NEWLINE
+
+    LABEL           shift and go to state 3
+    OPCODE          shift and go to state 5
+    NEWLINE         shift and go to state 4
+
+    program                        shift and go to state 1
+    statement                      shift and go to state 2
+
+state 1
+
+    (0) S' -> program .
+
+
+
+state 2
+
+    (1) program -> statement .
+
+    $end            reduce using rule 1 (program -> statement .)
+
+
+state 3
+
+    (2) program -> LABEL . COLUMN NEWLINE
+
+    COLUMN          shift and go to state 6
+
+
+state 4
+
+    (9) statement -> NEWLINE .
+
+    $end            reduce using rule 9 (statement -> NEWLINE .)
+
+
+state 5
+
+    (3) statement -> OPCODE . register COMMA register COMMA register NEWLINE
+    (4) statement -> OPCODE . register COMMA register COMMA IMMEDIATE NEWLINE
+    (5) statement -> OPCODE . register COMMA IMMEDIATE NEWLINE
+    (6) statement -> OPCODE . register COMMA LABEL NEWLINE
+    (7) statement -> OPCODE . register COMMA register COMMA LABEL NEWLINE
+    (8) register -> . REGISTER
+
+    REGISTER        shift and go to state 8
+
+    register                       shift and go to state 7
+
+state 6
+
+    (2) program -> LABEL COLUMN . NEWLINE
+
+    NEWLINE         shift and go to state 9
+
+
+state 7
+
+    (3) statement -> OPCODE register . COMMA register COMMA register NEWLINE
+    (4) statement -> OPCODE register . COMMA register COMMA IMMEDIATE NEWLINE
+    (5) statement -> OPCODE register . COMMA IMMEDIATE NEWLINE
+    (6) statement -> OPCODE register . COMMA LABEL NEWLINE
+    (7) statement -> OPCODE register . COMMA register COMMA LABEL NEWLINE
+
+    COMMA           shift and go to state 10
+
+
+state 8
+
+    (8) register -> REGISTER .
+
+    COMMA           reduce using rule 8 (register -> REGISTER .)
+    NEWLINE         reduce using rule 8 (register -> REGISTER .)
+
+
+state 9
+
+    (2) program -> LABEL COLUMN NEWLINE .
+
+    $end            reduce using rule 2 (program -> LABEL COLUMN NEWLINE .)
+
+
+state 10
+
+    (3) statement -> OPCODE register COMMA . register COMMA register NEWLINE
+    (4) statement -> OPCODE register COMMA . register COMMA IMMEDIATE NEWLINE
+    (5) statement -> OPCODE register COMMA . IMMEDIATE NEWLINE
+    (6) statement -> OPCODE register COMMA . LABEL NEWLINE
+    (7) statement -> OPCODE register COMMA . register COMMA LABEL NEWLINE
+    (8) register -> . REGISTER
+
+    IMMEDIATE       shift and go to state 12
+    LABEL           shift and go to state 13
+    REGISTER        shift and go to state 8
+
+    register                       shift and go to state 11
+
+state 11
+
+    (3) statement -> OPCODE register COMMA register . COMMA register NEWLINE
+    (4) statement -> OPCODE register COMMA register . COMMA IMMEDIATE NEWLINE
+    (7) statement -> OPCODE register COMMA register . COMMA LABEL NEWLINE
+
+    COMMA           shift and go to state 14
+
+
+state 12
+
+    (5) statement -> OPCODE register COMMA IMMEDIATE . NEWLINE
+
+    NEWLINE         shift and go to state 15
+
+
+state 13
+
+    (6) statement -> OPCODE register COMMA LABEL . NEWLINE
+
+    NEWLINE         shift and go to state 16
+
+
+state 14
+
+    (3) statement -> OPCODE register COMMA register COMMA . register NEWLINE
+    (4) statement -> OPCODE register COMMA register COMMA . IMMEDIATE NEWLINE
+    (7) statement -> OPCODE register COMMA register COMMA . LABEL NEWLINE
+    (8) register -> . REGISTER
+
+    IMMEDIATE       shift and go to state 18
+    LABEL           shift and go to state 19
+    REGISTER        shift and go to state 8
+
+    register                       shift and go to state 17
+
+state 15
+
+    (5) statement -> OPCODE register COMMA IMMEDIATE NEWLINE .
+
+    $end            reduce using rule 5 (statement -> OPCODE register COMMA IMMEDIATE NEWLINE .)
+
+
+state 16
+
+    (6) statement -> OPCODE register COMMA LABEL NEWLINE .
+
+    $end            reduce using rule 6 (statement -> OPCODE register COMMA LABEL NEWLINE .)
+
+
+state 17
+
+    (3) statement -> OPCODE register COMMA register COMMA register . NEWLINE
+
+    NEWLINE         shift and go to state 20
+
+
+state 18
+
+    (4) statement -> OPCODE register COMMA register COMMA IMMEDIATE . NEWLINE
+
+    NEWLINE         shift and go to state 21
+
+
+state 19
+
+    (7) statement -> OPCODE register COMMA register COMMA LABEL . NEWLINE
+
+    NEWLINE         shift and go to state 22
+
+
+state 20
+
+    (3) statement -> OPCODE register COMMA register COMMA register NEWLINE .
+
+    $end            reduce using rule 3 (statement -> OPCODE register COMMA register COMMA register NEWLINE .)
+
+
+state 21
+
+    (4) statement -> OPCODE register COMMA register COMMA IMMEDIATE NEWLINE .
+
+    $end            reduce using rule 4 (statement -> OPCODE register COMMA register COMMA IMMEDIATE NEWLINE .)
+
+
+state 22
+
+    (7) statement -> OPCODE register COMMA register COMMA LABEL NEWLINE .
+
+    $end            reduce using rule 7 (statement -> OPCODE register COMMA register COMMA LABEL NEWLINE .)
+

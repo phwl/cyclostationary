@@ -1,0 +1,15 @@
+START: 
+	# Louis' examples
+	mul $128,$1,$0
+	mul $129,$3,$2
+	mul $130,$5,$4
+	add $129,$128,$2
+
+mid:
+	# every opcode
+	add $4,$0,$2
+	sub $4,$0,$2
+	mul $4,$0,$2
+	max $4,$0,$2
+	mulsub $4,$0,$2
+	muladd $4,$0,$2
