@@ -38,7 +38,7 @@ class MachineCodeGenerator:
 
     def op_arith(self, tokens):
         '''
-        opcode  rs2 rs1 rd 
+        opcode  rs3 rs2 rs1 rd 
         '''
         opcode = tokens['opcode']
         bin_opcode = None
@@ -47,31 +47,33 @@ class MachineCodeGenerator:
         rd = None
         bin_rs1 = None
         bin_rs2 = None
+        bin_rs3 = None
         bin_rd = None
-        bin_res = '0000'
-        bin_wb = '1'
 
         try:
             bin_opcode = self.CONST.OPCODE_ARITH[opcode]
             rs1 = tokens['rs1']
             rs2 = tokens['rs2']
+            rs3 = tokens['rs3']
             rd = tokens['rd']
             bin_rs1 = self.get_bin_register(rs1)
             bin_rs2 = self.get_bin_register(rs2)
+            bin_rs3 = self.get_bin_register(rs3)[3:]  # only a 5-bit register
             bin_rd = self.get_bin_register(rd)
         except:
             cp.cprint_fail("Internal Error: ARITH: could not parse" +
                            "tokens in " + str(tokens['lineno']))
             exit()
 
-        bin_str = bin_res + bin_wb + bin_opcode + bin_rd + bin_rs2 + bin_rs1
+        bin_str = bin_opcode + bin_rs3 + bin_rs2 + bin_rs1 + bin_rd
         assert(len(bin_str) == 32)
 
         tok_dict = {
             'opcode': bin_opcode,
             'rs1': bin_rs1,
             'rd': bin_rd,
-            'rs2': bin_rs2
+            'rs2': bin_rs2,
+            'rs3': bin_rs3
         }
         return bin_str, tok_dict
 

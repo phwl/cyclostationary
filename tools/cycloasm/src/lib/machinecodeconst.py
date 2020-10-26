@@ -20,7 +20,10 @@ class MachineCodeConst:
                  INSTR_MAX, INSTR_MULSUB, INSTR_MULADD]
     # All instruction in a type
     INSTR_TYPE_R = [INSTR_ADD, INSTR_SUB, INSTR_MUL,
-                    INSTR_MAX, INSTR_MULSUB, INSTR_MULADD]
+                    INSTR_MAX]
+    # All instruction in a type
+    INSTR_TYPE_MAC = [INSTR_MULSUB, INSTR_MULADD]
+
 
     # Binary Opcodes
     BOP_ARITH = '0000000'

@@ -9,13 +9,13 @@ pip3 install -r requirements.txt
 
 Then follow the usage instructions at <https://github.com/metastableB/RISCV-RV32I-Assembler>, e.g.
 ```console
-phwl@phwlnuc:~/src/cyclostationary/tools/cycloasm/src$ cat test.cyc 
+phwl@vlan-2669-10-17-29-23 src % cat test.cyc              
 START: 
 	# Louis' examples
-	mul $128,$1,$0
-	mul $129,$3,$2
-	mul $130,$5,$4
-	add $129,$128,$2
+	add $128,$16,$48
+	mul $129,$17,$49
+	muladd $130,$18,$50,$0
+	mulsub $131,$129,$128,$1
 
 mid:
 	# every opcode
@@ -23,21 +23,28 @@ mid:
 	sub $4,$0,$2
 	mul $4,$0,$2
 	max $4,$0,$2
-	mulsub $4,$0,$2
-	muladd $4,$0,$2
-phwl@phwlnuc:~/src/cyclostationary/tools/cycloasm/src$ ./cycloasm.py -x -es test.cyc 
-Symbols and Addresses:
-{'START': 0, 'mid': 16}
-phwl@phwlnuc:~/src/cyclostationary/tools/cycloasm/src$ cat a.b 
-0B800001
-0B810203
-0B820405
-09810280
-09040200
-0A040200
-0B040200
-0D040200
-0E040200
-0F040200
-
+	mulsub $4,$1,$2,$3
+	muladd $5,$2,$3,$4
+phwl@vlan-2669-10-17-29-23 src % ./cycloasm.py -x -e test.cyc 
+3 20301080
+4 60311181
+5 E0321282
+6 C1808183
+10 20020004
+11 40020004
+12 60020004
+13 A0020004
+14 C3020104
+15 E4030205
+phwl@vlan-2669-10-17-29-23 src % cat a.b
+20301080
+60311181
+E0321282
+C1808183
+20020004
+40020004
+60020004
+A0020004
+C3020104
+E4030205
 ```

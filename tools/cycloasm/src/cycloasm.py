@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!/Users/phwl/anaconda3/bin/python3
 # Modified from code by Don Dennis 
 #   https://github.com/metastableB/RISCV-RV32I-Assembler
 # cycloasm.py

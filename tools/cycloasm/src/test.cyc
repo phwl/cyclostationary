@@ -1,9 +1,9 @@
 START: 
 	# Louis' examples
-	mul $128,$1,$0
-	mul $129,$3,$2
-	mul $130,$5,$4
-	add $129,$128,$2
+	add $128,$16,$48
+	mul $129,$17,$49
+	muladd $130,$18,$50,$0
+	mulsub $131,$129,$128,$1
 
 mid:
 	# every opcode
@@ -11,5 +11,5 @@ mid:
 	sub $4,$0,$2
 	mul $4,$0,$2
 	max $4,$0,$2
-	mulsub $4,$0,$2
-	muladd $4,$0,$2
+	mulsub $4,$1,$2,$3
+	muladd $5,$2,$3,$4

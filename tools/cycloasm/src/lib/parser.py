@@ -22,6 +22,7 @@ program: statement
 
 statement: OPCODE register COMMA register COMMA register NEWLINE
         | OPCODE register COMMA register COMMA IMM_I NEWLINE
+        | OPCODE register COMMA register COMMA register COMMA register NEWLINE
         | NEWLINE
 
 NOTE: We parse the porgram line by line Hence we don't
@@ -60,6 +61,23 @@ def p_statement_R(p):
         'rd': p[2],
         'rs1': p[4],
         'rs2': p[6],
+        'rs3' : "$0",
+        'lineno': p.lineno(1)
+    }
+
+
+def p_statement_MAC(p):
+    'statement : OPCODE register COMMA register COMMA register COMMA register NEWLINE'
+    if p[1] not in mcc.INSTR_TYPE_MAC:
+        cp.cprint_fail("Error:" + str(p.lineno(1)) +
+                       ": Incorrect opcode or arguments")
+        raise SyntaxError
+    p[0] = {
+        'opcode': p[1],
+        'rd': p[2],
+        'rs1': p[4],
+        'rs2': p[6],
+        'rs3': p[8],
         'lineno': p.lineno(1)
     }
 
@@ -488,7 +506,7 @@ def parse_pass_one(fin, args):
     cp.warn32 = False
     for line in fin:
         result = parser.parse(line)
-        if result["tokens"] is None:
+        if result is None or result["tokens"] is None:
             continue
 
         if result['type'] is 'non_label':
@@ -518,7 +536,7 @@ def parse_pass_two(fin, fout, symbols_table, args):
     address = 0
     for line in fin:
         result = parser.parse(line)
-        if result["tokens"] is None:
+        if result is None or result["tokens"] is None:
             continue
 
         if result['type'] is 'label':
