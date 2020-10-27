@@ -1,4 +1,4 @@
-#!/Users/phwl/anaconda3/bin/python3
+#!/usr/bin/python3
 
 import argparse as argparse
 
@@ -20,21 +20,26 @@ class Carith:
 
     def sub(a, b, c): 
         return(Carith.trunc(a[0] - b[0]), Carith.trunc(a[1] - b[1]))
+
     def mul(a, b, c): 
         return(Carith.trunc(a[0] * b[0] - a[1] * b[1]), 
-               Carith.trunc(a[0]*b[1] + a[1] * b[0]))
+               Carith.trunc(a[0] * b[1] + a[1] * b[0]))
 
-    # not sure what is needed here
     def max(a, b, c): 
-        return(a)
+        if (a[0]*a[0] + a[1]*a[1] > b[0]*b[0] + b[1]*b[1]):
+            return(a)
+        else:
+            return(b)
     
+    # b + a*c
     def mulsub(a, b, c): 
-        m = Carith.mul(a, b, c)
-        return(Carith.trunc(m[0] - c[0]), Carith.trunc(m[1] - c[1]))
+        m = Carith.mul(a, c, b)
+        return(Carith.trunc(b[0] - m[0]), Carith.trunc(b[1] - m[1]))
     
+    # b - a*c
     def muladd(a, b, c): 
-        m = Carith.mul(a, b, c)
-        return(Carith.trunc(m[0] + c[0]), Carith.trunc(m[1] + c[1]))
+        m = Carith.mul(a, c, b)
+        return(Carith.trunc(b[0] + m[0]), Carith.trunc(b[1] + m[1]))
     
     def exec(i, a, b, c):
         OP_F= [Carith.illegal, Carith.add, Carith.sub, Carith.mul, 
