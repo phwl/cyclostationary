@@ -1,5 +1,6 @@
 START: 
 	# Louis' examples
+	add $1,$2,$3
 	add $128,$16,$48
 	mul $129,$17,$49
 	muladd $130,$18,$50,$0
