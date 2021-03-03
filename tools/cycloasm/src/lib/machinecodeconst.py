@@ -4,6 +4,7 @@
 #
 # Constants and variable declaring various
 # machine instructions
+# Update: 3 March, 2021
 
 
 class MachineCodeConst:
@@ -17,7 +18,7 @@ class MachineCodeConst:
 
     # All reserved opcodes
     ALL_INSTR = [INSTR_ADD, INSTR_SUB, INSTR_MUL,
-                 INSTR_MAX, INSTR_MULSUB, INSTR_MULADD]
+                 INSTR_MULADD, INSTR_MULSUB, INSTR_MAX]
     # All instruction in a type
     INSTR_TYPE_R = [INSTR_ADD, INSTR_SUB, INSTR_MUL,
                     INSTR_MAX]
@@ -30,15 +31,15 @@ class MachineCodeConst:
 
     # The instruction in each distinct binary opcode
     INSTR_BOP_ARITH = [INSTR_ADD, INSTR_SUB, INSTR_MUL,
-                       INSTR_MAX, INSTR_MULSUB, INSTR_MULADD]
+                       INSTR_MULADD, INSTR_MULSUB, INSTR_MAX]
 
     # FUNCT for each instruction type
     OPCODE_ARITH = {
         INSTR_ADD: '001',
         INSTR_SUB: '010',
-        INSTR_MUL: '011',
-        INSTR_MAX: '101',
+        INSTR_MUL: '100',
+        INSTR_MULADD: '101',
         INSTR_MULSUB: '110',
-        INSTR_MULADD: '111'
+        INSTR_MAX: '111'
     }
 

@@ -44,6 +44,7 @@ class MachineCodeGenerator:
         bin_opcode = None
         rs1 = None
         rs2 = None
+        rs3 = None
         rd = None
         bin_rs1 = None
         bin_rs2 = None
