@@ -1,0 +1,48 @@
+START: 
+	# 8 element-wise complex multiplications
+	mul $64, $0, $32
+	mul $65, $1, $33
+	mul $66, $2, $34
+	mul $67, $3, $35
+	mul $68, $4, $36
+	mul $69, $5, $37
+	mul $70, $6, $38
+	mul $71, $7, $39
+
+	# 8-point FFT (bit-reverse order)
+	# stage 1
+	muladd $72, $64, $68, $0
+	mulsub $73, $64, $68, $0
+	muladd $74, $66, $70, $0
+	mulsub $75, $66, $70, $0
+	muladd $76, $65, $69, $0
+	mulsub $77, $65, $69, $0
+	muladd $78, $67, $71, $0
+	mulsub $79, $67, $71, $0
+	# stage 2
+	muladd $80, $72, $74, $0
+	mulsub $82, $72, $74, $0
+	muladd $81, $73, $75, $2
+	mulsub $83, $73, $75, $2
+	muladd $84, $76, $78, $0
+	mulsub $86, $76, $78, $0
+	muladd $85, $77, $79, $2
+	mulsub $87, $77, $79, $2
+	# stage 3
+	muladd $88, $80, $84, $0
+	mulsub $92, $80, $84, $0
+	muladd $89, $82, $86, $1
+	mulsub $93, $82, $86, $1
+	muladd $90, $81, $85, $2
+	mulsub $94, $81, $85, $2
+	muladd $91, $83, $87, $3
+	mulsub $95, $83, $87, $3
+
+mid:
+	# every opcode
+	# add $4,$0,$2
+	# sub $4,$0,$2
+	# mul $4,$0,$2
+	# max $4,$0,$2
+	# mulsub $4,$1,$2,$3
+	# muladd $5,$2,$3,$4
