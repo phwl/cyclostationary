@@ -15,11 +15,11 @@ To verify:
 python cyclostationary.py # should print "audiotest: PASS (error=0.0)" and show
 ~~~
 
-![Screen shot](images/ScreenShot_scf_fam.png)
+![Screen shot](analysis/images/ScreenShot_scf_fam.png)
 
 To acquire audio from microphone and plot scf:
 ~~~
 python livescd.py
 ~~~
 
-![Screen shot](images/ScreenShot_livescf.png)
+![Screen shot](analysis/images/ScreenShot_livescf.png)
