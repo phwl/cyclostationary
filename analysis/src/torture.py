@@ -125,7 +125,7 @@ def runtest(start, stop, startdB=10):
             testdB, resultl = bpsk_sweepsnr(bits, startdB=testdB+3, verbose=verbose)
         except:
             testdB, resultl = bpsk_sweepsnr(bits, startdB=startdB, verbose=verbose)        
-        print(f'bits=2^{i}: Score_SNR={testdB} ({datetime.datetime.now() - start})')
+        print(f'bits=2^{i}: Score_SNR={testdB} ({datetime.datetime.now() - start})', flush=True)
         scores.append([testdB, resultl])
     return scores
 
