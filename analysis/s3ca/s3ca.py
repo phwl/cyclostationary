@@ -102,6 +102,7 @@ import numpy as np
 
 from sfft_opt import Filter, flat_filter, sfft1
 from decimated_sfft import Plan, make_plan, decode
+from rffast import RFFASTBackend
 
 __all__ = ["dense_ssca", "s3ca", "check", "compare_backends", "make_backend",
            "S3CAResult", "CheckReport"]
@@ -344,15 +345,26 @@ class _DecimatedBackend:
 
 
 def make_backend(N, kappa, backend="sfft1", **kwargs):
-    """Build a sparse-FFT backend for `s3ca()`. `backend` is 'sfft1' or
-    'decimated'; `**kwargs` are forwarded to that backend's constructor
-    (filt/B/loc_loops/est_loops/tolerance/... for sfft1; plan/D/window/beta/
-    threshold/rel_tol/... for decimated)."""
+    """Build a sparse-FFT backend for `s3ca()`. `backend` is 'sfft1',
+    'decimated', or 'rffast'; `**kwargs` are forwarded to that backend's
+    constructor (filt/B/loc_loops/est_loops/tolerance/... for sfft1;
+    plan/D/window/beta/threshold/rel_tol/... for decimated; plan/d/f/
+    clusters/per_cluster/seed/iterations/noise_var/gamma/... for rffast --
+    see rffast.RFFASTBackend).
+
+    Note: 'rffast' needs N to factor into pairwise-coprime pieces near
+    kappa (rffast.choose_stage_bins raises a clear error otherwise -- a
+    plain power-of-two N, as used elsewhere in this module's defaults,
+    will not work here without passing an explicit f=[...]).
+    """
     if backend == "sfft1":
         return _SFFT1Backend(N, kappa, **kwargs)
     if backend == "decimated":
         return _DecimatedBackend(N, kappa, **kwargs)
-    raise ValueError(f"unknown backend {backend!r}; use 'sfft1' or 'decimated'")
+    if backend == "rffast":
+        return RFFASTBackend(N, kappa, **kwargs)
+    raise ValueError(
+        f"unknown backend {backend!r}; use 'sfft1', 'decimated', or 'rffast'")
 
 
 # ---------------------------------------------------------------------------
