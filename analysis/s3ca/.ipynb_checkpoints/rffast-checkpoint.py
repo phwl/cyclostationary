@@ -291,8 +291,8 @@ def front_end_indices(plan: Plan):
 # Back end: onion-peeling decoder (Algorithm 1)
 # ---------------------------------------------------------------------------
 def peel_decode(Ys, plan: Plan, beta, kappa=None, iterations=8,
-                 noise_var=None, gamma=0.5, energy_percentile=50.0,
-                 resid_slack=0.05):
+                 noise_var=None, gamma=0.5, energy_percentile=20.0,
+                 resid_slack=0.5):
     """Peeling decode over the front-end output `Ys` (mutated in place).
 
     Parameters
@@ -307,17 +307,8 @@ def peel_decode(Ys, plan: Plan, beta, kappa=None, iterations=8,
     noise_var : per-sample noise variance, if known. When given, the
         threshold is exactly the paper's T = (1+gamma)*D*noise_var
         (D = C*Nc samples per bin). When None (default), falls back to a
-        per-stage percentile of that stage's own bin energies, re-estimated
-        every iteration from the current (partially peeled) residual so the
-        floor isn't biased upward by not-yet-removed real signal -- see the
-        comment above the threshold computation in this function for the
-        reasoning, and the notebook this came out of for the empirical
-        tradeoff curve `energy_percentile`/`resid_slack` trace out (higher
-        precision, lower fill rate, as either is tightened) -- there is no
-        setting of either that fixes a case where the front end's own
-        aliasing loss has genuinely erased the SNR margin; at that point the
-        fix is architectural (larger per-stage f_s, i.e. less subsampling,
-        at the cost of reading more samples), not a threshold tweak.
+        percentile-based threshold over the pooled per-bin energies from
+        all stages (see module docstring for the tradeoff).
     resid_slack : the residual-energy singleton/multi-ton cutoff is
         threshold*(1+resid_slack), matching Algorithm 2 step 19's T but
         with a little extra margin since the fallback threshold above is
@@ -339,35 +330,20 @@ def peel_decode(Ys, plan: Plan, beta, kappa=None, iterations=8,
     # a raw per-sample noise variance sigma^2 to P_s*n*sigma^2 per (bin,
     # delay) -- an aliasing/decimation gain loss that differs by stage since
     # P_s = n/f_s does. Summed over D delays: T_s = (1+gamma)*D*P_s*n*sigma^2.
-    #
     # When sigma^2 (noise_var) isn't known, fall back to a per-stage
     # percentile of that stage's own bin energies -- pooling across stages
-    # would be wrong (different noise scales), and computing it only once
-    # up front is also wrong: at that point every bin's energy still
-    # includes whatever real signal it holds, biasing the floor estimate
-    # upward on any bin that turns out to be occupied. Instead this is
-    # *re-estimated every iteration* from the current (partially peeled)
-    # residual: as real singletons get subtracted out, the pooled energies
-    # used for the percentile progressively converge towards the true noise
-    # floor rather than a mix of noise and leftover signal. This costs
-    # nothing extra (the energies are already being computed each pass) and
-    # is the single change most worth making if you don't have a known
-    # noise_var -- see the notebook / conversation this came out of for why
-    # a *fixed*, once-computed threshold is the wrong shape of fix here.
-    fixed_thresh = None
+    # here would be wrong, since each stage's noise floor sits at a
+    # different scale.
     if noise_var is not None:
-        fixed_thresh = [(1.0 + gamma) * D * P * n * noise_var for P in Ps]
+        thresh = [(1.0 + gamma) * D * P * n * noise_var for P in Ps]
+    else:
+        thresh = [max(np.percentile((np.abs(Y) ** 2).sum(axis=(0, 1)),
+                                     energy_percentile), 1e-300)
+                  for Y in Ys]
 
     decoded: dict[int, complex] = {}
 
     for _ in range(iterations):
-        if fixed_thresh is not None:
-            thresh = fixed_thresh
-        else:
-            thresh = [max(np.percentile((np.abs(Y) ** 2).sum(axis=(0, 1)),
-                                         energy_percentile), 1e-300)
-                      for Y in Ys]
-
         progress = False
         for s, f in enumerate(fs):
             Y = Ys[s]
