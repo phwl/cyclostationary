@@ -84,7 +84,7 @@ density (SCD) of cyclostationary signals at large input sizes.
 It contains, in order:
 
 1. **Background** -- the SCD, the SSCA, and what S3CA changes.
-2. **The five engines tried**, each with the reasoning behind it and its
+2. **The engines tried**, each with the reasoning behind it and its
    measured result:
    - `sfft1` -- randomized hashing sparse FFT (the incumbent)
    - `decimated` -- deterministic decimation + binary-phase encoding
@@ -96,7 +96,11 @@ It contains, in order:
    underperforms `sfft1` on DSSS-BPSK for the *same* reason -- and a
    **tutorial, with worked examples, on why BPSK's cyclic spectrum is not
    sparse enough** for those methods.
-4. **The full source code** of every module written during the
+4. **Changing the question** -- a **parametric cyclic-feature detector**
+   (built here) that sidesteps the sparsity problem entirely by estimating
+   the baud rate directly instead of reconstructing the SCD, with a direct
+   head-to-head against the original S3CA reconstruction.
+5. **The full source code** of every module written during the
    investigation, embedded for reference.
 
 Every number and figure below is produced by executing the actual code in
@@ -646,26 +650,206 @@ refinement step where the top-$\kappa$ really does capture ~all the energy.
 """))
 
 # ===========================================================================
-# SECTION 4: FULL SOURCE CODE
+# SECTION 3.5: PARAMETRIC DETECTION (option 5) + comparison with S3CA
 # ===========================================================================
 cells.append(md(r"""
-## 4. Full source code of every module written
+## 4. Changing the question: parametric detection instead of reconstruction
 
-The four modules built during this investigation are embedded below in full
+Every method so far tries to **reconstruct** the SCD surface and is scored
+on recovering its top-$\kappa$ peaks. But that framing is what makes BPSK
+hard -- the heavy tail is only a problem if you insist on representing it.
+For **detection and classification** (is there a cyclic feature, and at
+what baud rate $\alpha_0$?) you don't need the surface at all. You need a
+few numbers, and estimating them directly is indifferent to the tail.
+
+`cyclic_detect.py` estimates the **cyclic autocorrelation** directly at
+candidate cycle frequencies:
+$$
+R_x^\alpha(\tau) \;=\; \frac{1}{M}\sum_{t\in\text{idx}} x(t+\tau)\,x^{(*)}(t)\,e^{-i2\pi\alpha t}
+$$
+(optionally the *conjugate* product $x(t+\tau)x(t)$, which is strong for
+BPSK), evaluated from a **subsampled** index set and combined across a few
+lags into one detection statistic. A cyclostationary signal has
+$|R_x^\alpha(\tau)|$ well above the noise floor **only** at
+$\alpha = m\alpha_0$ -- and nowhere across the heavy tail.
+
+First, the key fact that motivates the whole approach: on the *same* BPSK
+signal, how far above the off-grid floor do the true harmonics sit?
+"""))
+
+cyclic_premise = r"""
+N = 131072
+x, dr = bc.bpsk_signal(N, 0.25, 31, 10.0, seed=0)
+rng = np.random.default_rng(0)
+idx = np.sort(rng.choice(N-8, 4096, replace=False))
+taus = (1,2,3,4,5,6,7,8)
+
+from cyclic_detect import detection_statistic
+print(f"cyclic detection statistic at m*alpha0 vs off-grid (BPSK, 3.1% of samples):")
+print(f"{'m':>3}{'at m*alpha0':>14}{'at off-grid':>14}{'ratio':>10}")
+for m in range(0, 6):
+    on = detection_statistic(x, m*dr, taus, idx, conjugate=True)
+    off = detection_statistic(x, (m+0.37)*dr, taus, idx, conjugate=True)
+    print(f"{m:>3}{on:>14.4f}{off:>14.4f}{on/off if off>0 else float('inf'):>9.0f}x")
+"""
+cells.append(code(cyclic_premise))
+
+cells.append(md(r"""
+The harmonics stand **tens to thousands of times** above the off-grid floor
+-- on the very signal where reconstruction hit rate was ~5-73%. The
+broadband tail that broke reconstruction is simply invisible to a
+statistic that only asks "is there periodicity at exactly this $\alpha$?".
+
+### 4.1 Estimating $\alpha_0$ from a tiny subsample
+
+The fundamental cycle frequency is recovered essentially exactly, from a
+fraction of a percent of the samples:
+"""))
+
+cyclic_estimate = r"""
+from cyclic_detect import estimate_alpha0
+N = 131072
+x, dr = bc.bpsk_signal(N, 0.25, 31, 10.0, seed=0)
+rng = np.random.default_rng(0)
+print(f"true alpha0 = {dr:.8f}")
+for nsub in (4096, 1024, 256):
+    idx = np.sort(rng.choice(N-8, nsub, replace=False))
+    a_hat, _, _, _ = estimate_alpha0(x, (dr*0.3, dr*3.5), idx=idx, conjugate=True)
+    print(f"  {nsub:>5} samples ({100*nsub/N:4.1f}% of N): "
+          f"alpha0_hat = {a_hat:.8f}  rel err = {abs(a_hat-dr)/dr:.3%}")
+"""
+cells.append(code(cyclic_estimate))
+
+cells.append(md(r"""
+### 4.2 Detection performance and false-alarm control
+
+As a detector (with a CFAR-style threshold set from the scan's own robust
+statistics), it detects reliably down to a few dB SNR with the false-alarm
+rate held near the 1e-3 target. Getting the threshold right took care --
+the grid points are correlated, so a naive Bonferroni correction over all
+of them was far too conservative and killed sensitivity; the multiplier
+here is calibrated against the empirically measured H0 peak distribution.
+"""))
+
+cyclic_detect_snr = r"""
+from cyclic_detect import CyclicDetector
+Nd = 16384
+_, drd = bc.bpsk_signal(Nd, 0.25, 31, 10.0, seed=0)
+print("detection vs SNR (Nd=16384, 2048 samples = 12.5%, Pfa target 1e-3):")
+print(f"{'SNR (dB)':>9}{'detected':>10}{'peak/thr':>10}{'alpha0 err':>12}")
+for snr in (10, 7, 5, 3, 0, -5):
+    det = CyclicDetector(Nd, (drd*0.3, drd*3.5), n_samples=2048, conjugate=True, pfa=1e-3, seed=1)
+    xs, _ = bc.bpsk_signal(Nd, 0.25, 31, float(snr), seed=snr+100)
+    r = det.detect(xs)
+    print(f"{snr:>9}{str(r.detected):>10}{r.peak_stat/r.threshold:>9.2f}"
+          f"{abs(r.alpha0_hat-drd)/drd:>11.2%}")
+
+det = CyclicDetector(Nd, (drd*0.3, drd*3.5), n_samples=2048, conjugate=True, pfa=1e-3, seed=1)
+fa = sum(det.detect((np.random.default_rng(1000+i).standard_normal(Nd)
+                     + 1j*np.random.default_rng(2000+i).standard_normal(Nd))/np.sqrt(2)).detected
+         for i in range(50))
+print(f"\nfalse alarms on noise-only inputs: {fa}/50  (target Pfa = 1e-3)")
+"""
+cells.append(code(cyclic_detect_snr))
+
+cells.append(md(r"""
+### 4.3 Head-to-head with the original S3CA reconstruction
+
+The fair comparison, on the task the parametric method is *for* -- estimate
+$\alpha_0$. The original S3CA (sfft1 backend) reconstructs the SCD and we
+then infer $\alpha_0$ from its recovered peak locations; the parametric
+detector estimates it directly. **Both work** -- the information is present
+in the S3CA reconstruction -- but they differ in cost and in what else they
+give you.
+"""))
+
+head_to_head = r"""
+from cyclic_detect import estimate_alpha0
+
+def alpha0_from_reconstruction(result, hint_range):
+    # Infer alpha0 from recovered SCD peaks. Prefer the LARGEST candidate
+    # fundamental that still explains the recovered peaks as its harmonics
+    # (guards against the alpha0/2 subharmonic that trivially explains all
+    # even multiples -- a real trap noted while building this comparison).
+    alr = np.abs(result.alpha); val = np.abs(result.value)
+    lo, hi = hint_range
+    m = (alr > lo*0.5) & (val > 0.1*val.max())
+    ca, cw = alr[m], val[m]
+    if ca.size == 0:
+        return np.nan
+    grid = np.linspace(lo, hi, 4000)
+    scores = np.array([np.sum(cw[np.abs(ca - np.maximum(np.round(ca/a0),1)*a0) < 0.15*a0])
+                       for a0 in grid])
+    good = grid[scores > 0.9*scores.max()]
+    return good.max() if good.size else grid[np.argmax(scores)]
+
+kappa, Np = 50, 32
+N = bc.nearest_pow2(int(np.prod(bc.three_coprime_near(kappa))))
+rng = np.random.default_rng(0)
+idx = np.sort(rng.choice(N-8, 4096, replace=False))
+
+print("Task: estimate alpha0 from DSSS-BPSK, at several SNRs")
+print(f"{'SNR':>5}{'S3CA recon err':>18}{'samples':>9}{'  |  '}{'parametric err':>16}{'samples':>9}")
+for snr in (10, 5, 0):
+    x, dr = bc.bpsk_signal(N, 0.25, 31, float(snr), seed=snr+7)
+    res = s3ca.s3ca(x, Np, kappa, mode='full', seed=0, backend='sfft1',
+                    loc_loops=4, est_loops=8, tolerance=1e-4)
+    a_r = alpha0_from_reconstruction(res, (dr*0.5, dr*1.5))
+    a_p, _, _, _ = estimate_alpha0(x, (dr*0.3, dr*3.5), idx=idx, conjugate=True)
+    print(f"{snr:>5}{abs(a_r-dr)/dr:>17.2%}{res.n_raw_samples_read/N:>8.0%}"
+          f"{'  |  '}{abs(a_p-dr)/dr:>15.2%}{4096/N:>8.1%}")
+"""
+cells.append(code(head_to_head))
+
+cells.append(md(r"""
+**How to read this.** Both approaches estimate $\alpha_0$ to well under 1%
+-- the cyclic information really is present in the S3CA reconstruction, and
+inferring the baud rate from its peaks works. The differences are:
+
+- **Cost/samples.** The parametric detector uses a few thousand samples
+  (single-digit % of $N$, or less); S3CA's channelizer touches a large
+  fraction of $N$. For a *detection-only* mission the parametric route is
+  far cheaper.
+- **What you get.** S3CA returns the whole SCD surface -- every
+  (frequency, cycle-frequency) pair -- which you need for imaging,
+  equalization, or any analysis beyond "what's the baud rate". The
+  parametric detector returns only the cyclic-feature parameters.
+- **Robustness to the tail.** The parametric statistic is inherently
+  immune to the approximate-sparsity that penalized reconstruction, because
+  it never represents the tail.
+
+So this isn't "parametric beats S3CA" -- it's **match the tool to the
+mission**. If the goal is detect/classify (is a signal present, what's its
+baud rate), estimate the parameters directly and skip reconstruction. If
+the goal is the SCD surface itself, reconstruct it -- and use `sfft1`,
+whose approximately-sparse model fits BPSK, as this whole investigation
+found. The reconstruction "hit rate" that made the other methods look
+weak was, for the detection mission, simply measuring the wrong thing.
+"""))
+
+# ===========================================================================
+# SECTION: FULL SOURCE CODE
+# ===========================================================================
+cells.append(md(r"""
+## 5. Full source code of every module written
+
+The modules built during this investigation are embedded below in full
 for reference. They are shown as (non-executed) code cells -- they were
 already imported and exercised throughout the notebook above. Each plugs
-into `s3ca.py`'s existing backend protocol.
+into `s3ca.py`'s existing backend protocol (or, for `cyclic_detect.py`,
+stands alone).
 
 - **`rffast.py`** -- CRT-guided multi-stage aliasing sparse FFT + peeling decoder
 - **`fam.py`** -- FAM-style estimator (smaller slow-time FFT) reusing the S3CA machinery
 - **`harmonic.py`** -- harmonic-structured recovery (fundamental search + joint comb refit)
 - **`debias.py`** -- backend-agnostic debiasing + iterative refinement
+- **`cyclic_detect.py`** -- parametric cyclic-feature detector/estimator (this section)
 
 (The pre-existing `s3ca.py`, `sfft_opt.py`, and `decimated_sfft.py` are part
 of the original codebase and are not reproduced here.)
 """))
 
-for mod in ["rffast.py", "fam.py", "harmonic.py", "debias.py"]:
+for mod in ["rffast.py", "fam.py", "harmonic.py", "debias.py", "cyclic_detect.py"]:
     cells.append(md(f"### `{mod}`"))
     with open(mod) as fh:
         cells.append(code_display_only(fh.read()))

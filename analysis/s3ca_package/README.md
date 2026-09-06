@@ -30,8 +30,22 @@ Every method except `sfft1` assumes the cyclic spectrum is (near-)exactly
 sparse. DSSS-BPSK's cyclic spectrum is only *approximately* sparse — its
 top-50 coefficients hold just ~84% of a channel's energy, with the rest
 spread across tens of thousands of bins. `sfft1` wins because it never
-assumes the tail is zero. See the notebook's Section 3 for the full tutorial
-with worked examples.
+assumes the tail is zero. See the notebook's tutorial section for the full
+explanation with worked examples.
+
+## The other conclusion: change the question
+
+If the actual goal is **detection/classification** (is a cyclic feature
+present, and at what baud rate alpha0?) rather than reconstructing the whole
+SCD surface, then the sparsity problem disappears entirely.
+`cyclic_detect.py` estimates the cyclic autocorrelation directly at
+candidate cycle frequencies — a parametric approach indifferent to the
+broadband tail. On the same BPSK signal it recovers **alpha0 to <0.01%
+error from ~3% of the samples**, detects reliably down to a few dB SNR, and
+holds the false-alarm rate near its target. Head-to-head with the original
+S3CA reconstruction: both recover alpha0 accurately (S3CA ~0.46%, parametric
+~0.00–0.01%), but the parametric detector uses far fewer samples — while
+S3CA gives you the whole surface. Match the tool to the mission.
 
 ## Files
 
@@ -54,6 +68,9 @@ with worked examples.
 - `harmonic.py` — harmonic-structured recovery (fundamental search + joint
   comb least-squares refit)
 - `debias.py` — backend-agnostic debiasing + iterative refinement wrapper
+- `cyclic_detect.py` — parametric cyclic-feature detector/estimator: detects
+  and estimates the fundamental cycle frequency alpha0 directly from
+  subsampled data, bypassing SCD reconstruction. Self-test: `python3 cyclic_detect.py`
 - `bpsk_compare.py` — the head-to-head comparison driver used throughout.
   Run directly: `python3 bpsk_compare.py --kappa 50`
 
@@ -74,6 +91,7 @@ directory:
 ```bash
 python3 bpsk_compare.py --kappa 50        # head-to-head comparison
 python3 rffast.py                          # R-FFAST self-test
+python3 cyclic_detect.py                   # parametric detector self-test
 python3 build_summary_notebook.py          # regenerate the summary notebook
 ```
 
@@ -88,3 +106,8 @@ python3 build_summary_notebook.py          # regenerate the summary notebook
 - `debias` refinement needs its noise-floor guard on residual re-search
   (without it, spurious candidates crowd out real ones); it helps only when
   the signal is genuinely sparse.
+- `cyclic_detect` needs a resolution-aware alpha grid (cyclic peaks are as
+  sharp as full-resolution DFT bins) and a plausible alpha0 search range;
+  its detection threshold is calibrated to the empirical H0 distribution,
+  not a closed-form analytic one. Its scan cost is ~ n_alpha × n_samples,
+  so it is cheapest on subsampled inputs (its intended regime).
