@@ -372,18 +372,24 @@ indeed silent.}
 Figure \ref{fig:error} compares, harmonic by harmonic, the relative
 magnitude error of the proposed estimator against that of full sparse SCD
 reconstruction, both measured against the dense reference. Reconstruction
-achieves a mean error of $3.0\%$ on populated harmonics, against $8$--$12\%$
-for the comb estimator, reflecting the latter's reliance on far fewer
-samples. Error is largest for the weakest, highest-order harmonics in both
-methods.
+achieves a mean error of $2.8\%$ on populated harmonics, against roughly
+$13\%$ for the comb estimator, reflecting the latter's reliance on far
+fewer samples. Error is largest for the weakest, highest-order harmonics
+in both methods.
 
 \begin{figure}[t]
 \centering
 \includegraphics[width=\linewidth]{figs/fig4_error.pdf}
 \vspace{-6pt}
-\caption{Relative profile-magnitude error by harmonic index, comparing
-sparse SCD reconstruction and the proposed comb estimator against the
-dense reference.}
+\caption{Relative profile-magnitude error, comparing sparse SCD
+reconstruction and the proposed comb estimator against the dense
+reference, at each of the $2M_h+1=19$ populated cycle frequencies
+$\alpha=m\alpha_0$, $m=-9,\dots,9$ (the same locations as Fig.
+\ref{fig:overlay}). The bar at $\alpha=0$ reports error on the ordinary
+(non-cyclic) power term rather than a harmonic proper. Positive and
+negative harmonics are shown separately, since the spectral correlation
+density need not be symmetric in $\alpha$, and indeed the two sides differ
+appreciably (e.g.\ $\alpha=7\alpha_0$ versus $\alpha=-7\alpha_0$).}
 \label{fig:error}
 \end{figure}
 
@@ -411,7 +417,8 @@ The harmonic-comb estimator trades reconstruction accuracy for sample
 economy and computational speed. Its accuracy is fundamentally limited by
 the number of samples used to estimate \eqref{eq:cyclic-autocorr}, whereas
 full reconstruction benefits from a complete, high-resolution transform;
-the roughly threefold accuracy gap in Section 4.4 reflects this difference
+the accuracy gap of roughly fourfold in Section 4.4 reflects this
+difference
 rather than any deficiency in the comb model itself, which was shown in
 Section 4.1 to describe the profile's support exactly. The method assumes
 a single fundamental cycle frequency; multiple co-channel signals, each
