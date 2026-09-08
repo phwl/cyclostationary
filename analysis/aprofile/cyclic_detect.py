@@ -124,6 +124,13 @@ def scan_alpha(x, alphas, taus, idx=None, conjugate=False, max_elems=50_000_000)
     The (n_alpha x n_samples) phase matrix can be large, so alphas are
     processed in chunks capped at ~max_elems complex entries to bound peak
     memory (the full-sample, dense-grid case would otherwise need many GB).
+
+    NOTE: for a full-resolution scan (alphas spanning ~N points at the
+    native 1/N spacing), `scan_alpha_full` below is dramatically faster --
+    see its docstring. This direct-evaluation version stays useful for an
+    arbitrary, non-uniformly-spaced, or small set of alpha values (e.g. the
+    harmonic-comb evaluation in alpha_profile.py, which only needs a
+    handful of specific alphas, not a dense scan).
     """
     x = np.asarray(x)
     N = x.size
@@ -144,44 +151,131 @@ def scan_alpha(x, alphas, taus, idx=None, conjugate=False, max_elems=50_000_000)
     return np.sqrt(acc)
 
 
+def scan_alpha_full(x, taus, idx=None, conjugate=False):
+    """Exact full-native-resolution detection statistic at EVERY alpha =
+    q/N, q = 0..N-1, via a zero-padded FFT per lag -- not an approximate
+    NUFFT, an EXACT computation, because the sample positions in `idx` are
+    already exact integers on the N-grid (no off-grid interpolation is
+    needed the way a general non-uniform-sample NUFFT would require).
+
+    For a lag tau, forming the length-N buffer that is zero outside `idx`
+    and taking one FFT gives, at every native bin q in a single O(N log N)
+    pass, EXACTLY what scan_alpha would compute one alpha at a time:
+        FFT(buf)[q] = sum_{t in idx} buf(t) exp(-i 2 pi q t / N)
+    This is the whole point of `scan_alpha`'s per-alpha loop, just done for
+    all N bins at once by an FFT instead of by direct summation -- and it
+    turns the scan's compute cost from O(n_grid * n_samples) (grid size
+    times sample count -- see `estimate_alpha0`'s docstring on why n_grid
+    must be ~N for the coarse grid, i.e. O(N * n_samples)) into
+    O(L * N log N), independent of the sample count. For n_samples in the
+    thousands this is roughly a two-orders-of-magnitude speedup, and it is
+    what makes the coarse-to-fine grid dance in `estimate_alpha0` (and the
+    resolution-loses-the-peak-between-grid-points bug it was built to
+    avoid) unnecessary: this always returns the exact answer at native
+    1/N resolution.
+
+    Returns the combined statistic (length N, indices are raw FFT bins
+    0..N-1, i.e. alpha = q/N for q < N/2 and alpha = (q-N)/N for q >= N/2 --
+    same convention as np.fft.fft/np.fft.fftfreq).
+    """
+    x = np.asarray(x)
+    N = x.size
+    acc = np.zeros(N)
+    for tau in taus:
+        if idx is None:
+            ii = np.arange(N - abs(tau))
+        else:
+            ii = idx[idx + tau < N]
+        prod = x[ii + tau] * (x[ii] if conjugate else np.conj(x[ii]))
+        buf = np.zeros(N, dtype=complex)
+        buf[ii] = prod
+        R = np.fft.fft(buf) / ii.size
+        acc += np.abs(R) ** 2
+    return np.sqrt(acc)
+
+
 def estimate_alpha0(x, alpha_range, taus=(1, 2, 3, 4, 5, 6, 7, 8), idx=None,
                      conjugate=False, coarse=None, refine=True, refine_factor=50,
-                     harmonic_aware=True):
+                     harmonic_aware=True, fast=True):
     """Estimate the fundamental cycle frequency alpha0 in `alpha_range =
     (lo, hi)`.
 
-    The cyclic-autocorrelation peak at a true cycle frequency is as sharp as
-    a full-resolution DFT bin (width ~1/N in alpha). A too-coarse grid lets
-    the sharp peak fall between samples so a nearby harmonic that happens to
-    land on a grid point wins instead (a real bug this hit: a 400-point grid
-    locked onto 2*alpha0). Two safeguards:
+    fast=True (default): use `scan_alpha_full` to get the EXACT statistic at
+    every native bin (alpha = q/N) in one O(L*N log N) pass, then restrict to
+    `alpha_range` and disambiguate harmonics by directly indexing into that
+    already-computed array (no extra scans needed) -- see `scan_alpha_full`'s
+    docstring for why this is ~2 orders of magnitude faster than scanning a
+    (hi-lo)*N-point grid by direct summation. A small local refinement
+    window (a few bins wide) then interpolates for the true alpha0, which is
+    generally off the native grid (e.g. a chip_rate/gain baud rate need not
+    be an exact multiple of 1/N).
 
-    * `coarse=None` sizes the grid so the step is ~1/(2N) -- fine enough that
-      no sharp cyclic peak hides between samples.
-    * `harmonic_aware=True` adds a harmonic-sum disambiguation: rather than
-      taking the single tallest scan peak (which can be a strong harmonic
-      m*alpha0 rather than the fundamental), it re-scores the top peaks by
-      how much cyclic energy sits at that candidate AND its first few
-      sub-multiples, preferring the smallest alpha that explains the comb.
-      This is the cyclic-domain analogue of the subharmonic tie-break in
-      harmonic.py.
+    fast=False: the original direct-summation grid search (`scan_alpha`),
+    kept for comparison and for cases where `idx` spans a small time range
+    (so an N-length FFT buffer would be wasteful relative to the direct sum).
+
+    Both paths guard against the same failure mode: the cyclic-
+    autocorrelation peak at a true cycle frequency is as sharp as a
+    full-resolution DFT bin, so a too-coarse grid can miss it while a
+    strong harmonic that happens to land on a grid point wins instead (a
+    real bug this hit: a 400-point grid locked onto 2*alpha0).
+    `harmonic_aware=True` fixes this by re-scoring top candidates on how
+    much cyclic energy sits at their own harmonics too, preferring the
+    smallest alpha that explains the comb (the cyclic-domain analogue of
+    the subharmonic tie-break in harmonic.py).
 
     Returns (alpha0_hat, peak_stat, alphas_scanned, stats_scanned).
     """
     lo, hi = alpha_range
     N = np.asarray(x).size
+
+    if fast:
+        full_stats = scan_alpha_full(x, taus, idx, conjugate)     # length N
+        q = np.arange(N)
+        q_centered = np.where(q < N // 2, q, q - N)
+        alpha_native = q_centered / N
+        mask = (alpha_native >= lo) & (alpha_native <= hi)
+        alphas = alpha_native[mask]
+        stats = full_stats[mask]
+        if alphas.size == 0:
+            raise ValueError("alpha_range contains no native bins")
+
+        if harmonic_aware:
+            n_peaks = min(8, stats.size)
+            cand_local = np.argsort(-stats)[:n_peaks]
+            H = 4
+            best, best_score = None, -np.inf
+            for li in cand_local:
+                a = alphas[li]
+                comb_score = sum(full_stats[int(round(a * m * N)) % N]
+                                 for m in range(1, H + 1) if a * m <= hi)
+                score = comb_score - 1e-9 * a       # tie-break toward smaller alpha
+                if score > best_score:
+                    best_score, best = score, a
+            peakloc = best if best is not None else alphas[int(np.argmax(stats))]
+        else:
+            peakloc = alphas[int(np.argmax(stats))]
+
+        if refine:
+            # true alpha0 is generally off the native 1/N grid -- a small
+            # local window (a couple of bins wide) is now all that's
+            # needed, unlike the old full-range coarse-to-fine dance.
+            step = 1.0 / N
+            fine = np.linspace(peakloc - step, peakloc + step, refine_factor)
+            fine = fine[fine > 0]
+            fstats = scan_alpha(x, fine, taus, idx, conjugate)
+            j = int(np.argmax(fstats))
+            return fine[j], fstats[j], alphas, stats
+        i = int(np.argmin(np.abs(alphas - peakloc)))
+        return alphas[i], stats[i], alphas, stats
+
+    # -------- fast=False: original direct-summation grid search --------
     if coarse is None:
         coarse = max(64, int(np.ceil((hi - lo) * N * 2)))
     alphas = np.linspace(lo, hi, coarse)
     stats = scan_alpha(x, alphas, taus, idx, conjugate)
 
     if harmonic_aware:
-        # consider the strongest few scan peaks as fundamental candidates,
-        # and for each, sum the statistic at it and its first few harmonics
-        # (m=1..H). A true fundamental lights up its whole comb; a harmonic
-        # of the true fundamental cannot (its own "harmonics" would fall
-        # outside / between real lines). Prefer the candidate with the
-        # largest comb sum, breaking ties toward smaller alpha.
         n_peaks = min(8, stats.size)
         cand_i = np.argsort(-stats)[:n_peaks]
         H = 4
@@ -192,8 +286,6 @@ def estimate_alpha0(x, alpha_range, taus=(1, 2, 3, 4, 5, 6, 7, 8), idx=None,
             if comb.size == 0:
                 continue
             comb_stat = scan_alpha(x, comb, taus, idx, conjugate).sum()
-            # slight preference for smaller alpha to resolve fundamental vs
-            # its harmonics when comb sums are close
             score = comb_stat - 1e-9 * a
             if score > best_score:
                 best_score, best = score, a

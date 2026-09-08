@@ -47,6 +47,30 @@ S3CA reconstruction: both recover alpha0 accurately (S3CA ~0.46%, parametric
 ~0.00–0.01%), but the parametric detector uses far fewer samples — while
 S3CA gives you the whole surface. Match the tool to the mission.
 
+`alpha_profile.py` extends this to the **complete alpha profile**
+(P(alpha) = max_f |S_X^alpha(f)|, the paper's own Fig. 3 lower panels): the
+profile is far sparser than the surface (~3% of alpha bins nonzero, all on
+the harmonic comb), so it's recovered by estimating alpha0 and evaluating
+only the comb points — landing on the dense profile at every populated
+alpha from ~6% of the samples.
+
+**On complexity — a real finding, not just intuition:** the naive way to
+scan for alpha0 is compute-bound, not sample-bound — resolving a cyclic
+peak needs grid resolution ~1/N, so a direct-summation scan costs
+O(N) per lag despite reading only M<<N samples (worse than a dense
+computation for M in the thousands; measured ~26s at N=131072, wide prior).
+Fixed by recognizing this is an EXACT (not approximate) problem: subsampled
+positions are already integers on the N-grid, so zero-padding into a
+length-N buffer and taking one FFT gives the exact non-uniform DFT at every
+native bin in O(N log N), independent of sample count. Measured speedup:
+**~200-250x**, for identical accuracy — and the result is now faster than
+*both* dense SSCA and S3CA's own sparse reconstruction at every N tested
+(16K to 1M), because alpha0 estimation never needs to resolve spectral
+frequency and so skips the Np-fold channelizer cost entirely. What it still
+gives up: accuracy (S3CA's reconstruction is ~3x more accurate on the
+profile, since it's a full-resolution transform vs. a lower-SNR estimate
+from far fewer points) and generality (no full SCD surface).
+
 ## Files
 
 ### Original codebase (pre-existing)
@@ -71,6 +95,12 @@ S3CA gives you the whole surface. Match the tool to the mission.
 - `cyclic_detect.py` — parametric cyclic-feature detector/estimator: detects
   and estimates the fundamental cycle frequency alpha0 directly from
   subsampled data, bypassing SCD reconstruction. Self-test: `python3 cyclic_detect.py`
+- `alpha_profile.py` — complete alpha-profile estimation: parametric alpha0
+  + harmonic-comb evaluation. Recovers the full profile (every populated
+  cycle frequency) from a few % of samples. Self-test: `python3 alpha_profile.py`
+  Note: `estimate_alpha0`/`scan_alpha_full` in `cyclic_detect.py` default to
+  the exact zero-padded-FFT scan (`fast=True`), ~200-250x faster than the
+  original direct-summation grid search (`fast=False`, kept for comparison).
 - `bpsk_compare.py` — the head-to-head comparison driver used throughout.
   Run directly: `python3 bpsk_compare.py --kappa 50`
 
@@ -92,6 +122,7 @@ directory:
 python3 bpsk_compare.py --kappa 50        # head-to-head comparison
 python3 rffast.py                          # R-FFAST self-test
 python3 cyclic_detect.py                   # parametric detector self-test
+python3 alpha_profile.py                   # alpha-profile estimator self-test
 python3 build_summary_notebook.py          # regenerate the summary notebook
 ```
 

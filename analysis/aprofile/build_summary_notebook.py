@@ -100,7 +100,10 @@ It contains, in order:
    (built here) that sidesteps the sparsity problem entirely by estimating
    the baud rate directly instead of reconstructing the SCD, with a direct
    head-to-head against the original S3CA reconstruction.
-5. **The full source code** of every module written during the
+5. **The complete alpha profile** -- a third target, between the full
+   surface and pure detection, recovered cheaply (built here) by combining
+   the parametric $\alpha_0$ estimate with a harmonic-comb evaluation.
+6. **The full source code** of every module written during the
    investigation, embedded for reference.
 
 Every number and figure below is produced by executing the actual code in
@@ -110,7 +113,7 @@ paper's own DSSS-BPSK test signal.
 
 # ---------------------------------------------------------------------------
 setup = r"""
-import sys, os
+import sys, os, time
 sys.path.insert(0, os.getcwd())
 import numpy as np
 import matplotlib.pyplot as plt
@@ -828,28 +831,262 @@ weak was, for the detection mission, simply measuring the wrong thing.
 """))
 
 # ===========================================================================
+# SECTION 5: THE ALPHA PROFILE
+# ===========================================================================
+cells.append(md(r"""
+## 5. A third question: the complete alpha profile
+
+Between "the whole SCD surface" and "just is-there-a-signal" sits a very
+common middle target: the **alpha profile**
+$$
+P(\alpha) \;=\; \max_f \, |S_X^\alpha(f)|,
+$$
+the peak of the SCD over spectral frequency at each cycle frequency -- the
+lower panels of Fig. 3 in the S3CA paper. It is what most cyclic
+detection/classification actually consumes.
+
+The profile turns out to be the *easiest* of the three targets, once you
+look at its structure: collapsing the $f$ axis away leaves something far
+sparser than the SCD surface. Measure it directly.
+"""))
+
+profile_sparsity = r"""
+import alpha_profile as ap
+kappa, Np = 50, 32
+N = bc.nearest_pow2(int(np.prod(bc.three_coprime_near(kappa))))
+x, dr = bc.bpsk_signal(N, 0.25, 31, 10.0, seed=0)
+
+centers, prof = ap.dense_alpha_profile(x, Np, n_bins=4000)
+frac = np.mean(prof > 0.02 * prof.max())
+print(f"dense alpha profile: {frac:.1%} of alpha bins are non-negligible")
+print(f"  (vs the full SCD surface, whose per-channel top-50 already misses ~16%")
+print(f"   of the energy -- the profile is dramatically sparser because max-over-f")
+print(f"   collapses the heavy tail in spectral frequency away)")
+
+# where is the support? at the harmonic comb m*alpha0
+peaks = centers[prof > 0.05 * prof.max()]
+mult = np.round(peaks / dr)
+print(f"\n  all significant profile peaks sit at integer multiples of alpha0:")
+print(f"  multiples present: {sorted(set(int(m) for m in mult))}")
+"""
+cells.append(code(profile_sparsity))
+
+cells.append(md(r"""
+Only ~3% of cycle-frequency bins are populated, and every one sits on the
+harmonic comb $\{m\alpha_0\}$. That is the whole profile -- so the recipe is
+immediate:
+
+1. estimate $\alpha_0$ cheaply and exactly with the parametric detector
+   (Section 4),
+2. evaluate the profile *value* only at the comb points $m\alpha_0$.
+
+No 2-D search, no sparse recovery, no exact-sparsity assumption -- and,
+like the detector, it is immune to the approximate-sparsity that defeated
+reconstruction, because it never represents anything off the comb.
+`alpha_profile.harmonic_alpha_profile` does exactly this.
+"""))
+
+profile_estimate = r"""
+res = ap.harmonic_alpha_profile(x, Np, (dr*0.5, dr*1.5), n_harmonics=10,
+                                n_samples=8192, n_samples_alpha0=4096, seed=0)
+print(f"alpha0 estimated = {res.alpha0:.8f}  (err {abs(res.alpha0-dr)/dr:.2%})")
+print(f"samples used = {res.n_samples_used} ({100*res.n_samples_used/N:.1f}% of N), "
+      f"{res.elapsed*1e3:.0f} ms")
+
+def dref(a):
+    band = np.abs(centers - a) < 0.3*dr
+    return prof[band].max() if band.any() else 0.0
+
+errs = []
+print(f"\n{'m':>3}{'alpha':>11}{'dense P':>12}{'estimate':>12}{'rel err':>10}")
+for m, a, p in zip(range(-10, 11), res.alphas, res.profile):
+    d = dref(m*dr)
+    e = abs(p-d)/d if d > 0 else float('nan')
+    if d > 0.05*prof.max():
+        errs.append(e)
+    if abs(m) <= 6:
+        print(f"{m:>+3}{a:>11.5f}{d:>12.1f}{p:>12.1f}{e:>9.1%}")
+print(f"\nmean rel err on populated harmonics: {np.nanmean(errs):.1%}")
+"""
+cells.append(code(profile_estimate))
+
+profile_plot = r"""
+fig, ax = plt.subplots(figsize=(10, 4))
+ax.plot(centers, prof/prof.max(), color="0.6", lw=0.8,
+        label="dense SSCA (full profile)")
+ax.stem(res.alphas, res.profile/prof.max(), linefmt="C1-", markerfmt="C1o",
+        basefmt=" ", label=f"harmonic-comb estimate ({100*res.n_samples_used/N:.0f}% of samples)")
+ax.set_xlim(-0.08, 0.08)
+ax.set_xlabel("cycle frequency alpha"); ax.set_ylabel("normalised profile")
+ax.set_title("Alpha profile: dense vs. cheap harmonic-comb estimate (DSSS-BPSK)")
+ax.legend(fontsize=9)
+plt.tight_layout(); plt.show()
+"""
+cells.append(code(profile_plot, show_figure=True))
+
+cells.append(md(r"""
+The estimate (orange) lands on the dense full profile (grey) at every
+populated cycle frequency, from a few percent of the samples, while the
+dense profile is empty everywhere else. The strong harmonics match to a few
+percent; the weak outermost ones (near the noise floor) are less accurate,
+which is honest -- few subsamples resolve a near-floor line poorly.
+
+### 5.1 Complexity: sample cost vs. compute cost, and an exact 251x speedup
+
+The cost of this whole pipeline is dominated by one step: the $\alpha_0$
+search. It is worth working out *why*, because "sample count" and "compute
+cost" turn out to move in opposite directions here, and getting that wrong
+cost this investigation dearly before a fix was found.
+
+**The naive scan is compute-bound, not sample-bound.** A cyclic-
+autocorrelation peak is as sharp as a full-resolution DFT bin (width
+$\sim 1/N$), so resolving it needs a grid of $\sim(\text{hi}-\text{lo})\cdot N$
+candidate $\alpha$ values evaluated by direct summation over the $M$
+subsampled points -- cost $O(L\cdot(\text{hi}-\text{lo})\cdot N\cdot M)$,
+$L$ = number of lags. That is **linear in $N$** despite reading only $M\ll N$
+samples, and for $M$ in the thousands it is *worse* than a dense computation.
+"""))
+
+complexity_naive = r"""
+from cyclic_detect import estimate_alpha0
+N = 131072
+x, dr = bc.bpsk_signal(N, 0.25, 31, 10.0, seed=0)
+rng = np.random.default_rng(0)
+idx = np.sort(rng.choice(N-1, 4096, replace=False))
+
+t0 = time.time()
+a_slow, _, _, _ = estimate_alpha0(x, (dr*0.3, dr*3.5), idx=idx, conjugate=True, fast=False)
+t_slow = time.time() - t0
+print(f"naive direct-summation scan: {t_slow*1e3:.0f} ms, alpha0 err = {abs(a_slow-dr)/dr:.4%}")
+"""
+cells.append(code(complexity_naive))
+
+cells.append(md(r"""
+**The fix: this is not an approximate NUFFT problem, it is an exact one.**
+The subsampled positions are already exact integers on the native $N$-grid
+(not arbitrary real-valued positions), so there is no interpolation to
+approximate. Zero-padding the lag-product samples into a length-$N$ buffer
+and taking ONE FFT gives the exact non-uniform DFT at *every* native bin
+simultaneously:
+$$
+\text{FFT}(\text{buf})[q] = \sum_{t \in \text{idx}} \text{buf}(t)\, e^{-i2\pi qt/N}
+$$
+-- which is precisely what the grid scan computed one $\alpha$ at a time.
+This turns the scan into $O(L\cdot N\log N)$, **independent of the sample
+count $M$**, and removes the coarse-to-fine dance (and the "sharp peak
+falls between grid points" bug that caused the earlier harmonic-lock
+failure) entirely, since it returns the exact answer at native resolution
+in one pass. `scan_alpha_full` / `estimate_alpha0(..., fast=True)` (now the
+default) implement this.
+"""))
+
+complexity_fast = r"""
+t0 = time.time()
+a_fast, _, _, _ = estimate_alpha0(x, (dr*0.3, dr*3.5), idx=idx, conjugate=True, fast=True)
+t_fast = time.time() - t0
+print(f"exact zero-padded-FFT scan:  {t_fast*1e3:.0f} ms, alpha0 err = {abs(a_fast-dr)/dr:.4%}")
+print(f"speedup: {t_slow/t_fast:.1f}x, for essentially identical accuracy")
+"""
+cells.append(code(complexity_fast))
+
+cells.append(md(r"""
+**251x, for the same answer.** And this is not merely "as fast as dense" --
+it is faster than *both* dense SSCA and S3CA's own sparse reconstruction,
+at every $N$ tested, because estimating $\alpha_0$ never needs to resolve
+spectral frequency $f$ at all. It skips the channelizer and the $N_P$-fold
+per-channel outer transform entirely -- a structural saving dense/S3CA
+cannot take, since resolving the *full* SCD surface (or even just the
+profile's channel-of-origin) inherently requires processing $N_P$ channels.
+"""))
+
+complexity_scaling = r"""
+print(f"{'N':>9}{'dense (ms)':>13}{'S3CA sfft1 (ms)':>18}{'parametric-fast (ms)':>22}")
+for Ns in (16384, 65536, 262144, 1048576):
+    xs, drs = bc.bpsk_signal(Ns, 0.25, 31, 10.0, seed=0)
+    t0 = time.time(); ap.dense_alpha_profile(xs, 32, n_bins=4000); t_d = (time.time()-t0)*1e3
+    t0 = time.time()
+    s3ca.s3ca(xs, 32, 50, mode="full", seed=0, backend="sfft1", loc_loops=4, est_loops=8, tolerance=1e-4)
+    t_s = (time.time()-t0)*1e3
+    r2 = np.random.default_rng(0); idx2 = np.sort(r2.choice(Ns-1, 4096, replace=False))
+    t0 = time.time()
+    estimate_alpha0(xs, (drs*0.5, drs*1.5), idx=idx2, conjugate=True, fast=True)
+    t_p = (time.time()-t0)*1e3
+    print(f"{Ns:>9}{t_d:>13.0f}{t_s:>18.0f}{t_p:>22.0f}")
+"""
+cells.append(code(complexity_scaling))
+
+cells.append(md(r"""
+### 5.2 The complete picture: sample complexity, compute complexity, and accuracy
+
+| Approach | Sample complexity | Compute complexity | Notes |
+|---|---|---|---|
+| Dense SSCA | $O(N)$ | $O(N N_P(\log N_P + \log N))$ | ground truth |
+| S3CA (`sfft1`, full mode) | sublinear for exactly-sparse; $\approx O(N)$ in practice here (channelizer footprint saturates at this $\kappa$) | $O(N_P \cdot \text{polylog}(N,\kappa))$, sublinear | most accurate reconstruction |
+| Parametric, naive scan | $O(M)$, $M\ll N$ | $O(L\cdot(\text{hi}-\text{lo})\cdot N\cdot M)$ -- worse than dense for $M$ in the thousands | superseded below |
+| **Parametric, exact FFT scan** | $O(M)$, $M\ll N$ | $O(L\cdot N\log N)$, independent of $M$, no channelizer | **fastest in absolute terms**, at ~6% of the samples |
+
+And, measured on the same DSSS-BPSK signal ($\kappa=50$, $N_P=32$, 10 dB SNR):
+mean profile error on the populated harmonics is **~3.0%** for S3CA
+reconstruction and **~8-12%** for the parametric estimate -- S3CA remains
+noticeably more accurate, because it computes an honest full-resolution
+transform while the parametric route is a lower-SNR matched-filter estimate
+from far fewer points.
+
+**So the corrected bottom line, updated from the earlier (unoptimized)
+comparison:** the parametric route no longer trades speed for its sample
+efficiency -- fixing the scan's asymptotics wins on *both* axes for the
+$\alpha_0$/profile task. What it still gives up is accuracy (roughly 3x
+higher error than S3CA's reconstruction) and generality (S3CA also hands
+you the full SCD surface for tasks the profile alone cannot answer). Pick
+`sfft1`-based S3CA when the surface or best-achievable accuracy matters;
+pick the parametric route when speed and sample economy matter more than a
+few percent of profile accuracy -- which, for detection/classification, is
+usually the actual requirement.
+"""))
+
+cells.append(md(r"""
+### The three targets, and the right tool for each
+
+| Target | Right approach | Why |
+|---|---|---|
+| Full SCD surface $S_X^\alpha(f)$ | S3CA reconstruction with `sfft1` | only approach that returns the whole surface; `sfft1`'s approximately-sparse model fits BPSK |
+| Complete alpha profile $P(\alpha)$ | parametric $\alpha_0$ + harmonic-comb evaluation (`alpha_profile.py`) | profile is genuinely sparse (a comb); cheaper and cleaner than reconstructing the surface -- and, once the exact-FFT fix is used, faster too |
+| Presence / baud rate only | parametric detector (`cyclic_detect.py`) | needs a few numbers, not a surface; immune to the heavy tail |
+
+The through-line of the whole investigation: **the hardness was never the
+signal, it was the mismatch between the question asked and the sparsity
+assumed.** Reconstruction of an approximately-sparse surface is hard;
+collapsing to the profile or the parameters recovers genuine sparsity and
+makes the problem easy again -- and, as this section shows, recovers a lot
+of speed too, once the resulting computation is set up to exploit that the
+task no longer needs a channelizer at all.
+"""))
+
+# ===========================================================================
 # SECTION: FULL SOURCE CODE
 # ===========================================================================
 cells.append(md(r"""
-## 5. Full source code of every module written
+## 6. Full source code of every module written
 
 The modules built during this investigation are embedded below in full
 for reference. They are shown as (non-executed) code cells -- they were
 already imported and exercised throughout the notebook above. Each plugs
-into `s3ca.py`'s existing backend protocol (or, for `cyclic_detect.py`,
-stands alone).
+into `s3ca.py`'s existing backend protocol (or, for `cyclic_detect.py` and
+`alpha_profile.py`, builds on it directly).
 
 - **`rffast.py`** -- CRT-guided multi-stage aliasing sparse FFT + peeling decoder
 - **`fam.py`** -- FAM-style estimator (smaller slow-time FFT) reusing the S3CA machinery
 - **`harmonic.py`** -- harmonic-structured recovery (fundamental search + joint comb refit)
 - **`debias.py`** -- backend-agnostic debiasing + iterative refinement
-- **`cyclic_detect.py`** -- parametric cyclic-feature detector/estimator (this section)
+- **`cyclic_detect.py`** -- parametric cyclic-feature detector/estimator (Section 4)
+- **`alpha_profile.py`** -- complete alpha-profile estimation (Section 5)
 
 (The pre-existing `s3ca.py`, `sfft_opt.py`, and `decimated_sfft.py` are part
 of the original codebase and are not reproduced here.)
 """))
 
-for mod in ["rffast.py", "fam.py", "harmonic.py", "debias.py", "cyclic_detect.py"]:
+for mod in ["rffast.py", "fam.py", "harmonic.py", "debias.py", "cyclic_detect.py",
+            "alpha_profile.py"]:
     cells.append(md(f"### `{mod}`"))
     with open(mod) as fh:
         cells.append(code_display_only(fh.read()))
